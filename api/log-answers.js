@@ -82,45 +82,64 @@ export default async function handler(req, res) {
             }
 
         } else if (type === 'answers') {
-            // --- Log Answers (No changes needed here in terms of DB schema from original) ---
+            // --- Log Answers ---
             const answers = payload.answers;
-
             if (!Array.isArray(answers) || answers.length === 0) {
                 return res.status(400).json({ message: 'Missing or empty "answers" array.' });
             }
 
             // --- Database Insertion using Transaction ---
-            try { // Added try block specifically for transaction logic
-                console.log(`Attempting to insert ${answers.length} answers via HTTP transaction for User: ${userId}, Session: ${sessionId}`); // Added log message
-                 // Prepare queries for the transaction
-                 const queries = answers.map(answer => {
-                     // Validate each answer object before creating the query
-                     if (answer.question_number === undefined || answer.question_number === null || !answer.question_text || answer.answer_value === undefined) {
-                         // Throw an error that will be caught by the outer try...catch
-                         throw new Error(`Invalid answer format in array: ${JSON.stringify(answer)}`);
-                     }
-                     // Use SQL template literal for safety and readability
-                     return sql`
-                         INSERT INTO test_answers
-                             (user_id, session_id, question_number, question_text, answer_value, answer_label, event_timestamp)
-                         VALUES
-                             (${userId}, ${sessionId}, ${answer.question_number}, ${answer.question_text}, ${answer.answer_value}, ${answer.answer_label || 'N/A'}, ${timestamp}::timestamptz) -- Added explicit timestamp cast
-                     `;
-                 });
+            let queries; // Define queries variable outside the try block
+            try {
+                // --- Stage 1: Prepare queries and Validate Data ---
+                console.log(`Validating and preparing ${answers.length} answers for User: ${userId}, Session: ${sessionId}`);
+                queries = answers.map(answer => {
+                    // Validate each answer object before creating the query
+                    if (answer.question_number === undefined || answer.question_number === null || !answer.question_text || answer.answer_value === undefined) {
+                        // Throw a specific error for validation failures
+                        const validationError = new Error(`Invalid answer format in array: ${JSON.stringify(answer)}`);
+                        validationError.isValidationError = true; // Mark it as a validation error
+                        throw validationError;
+                    }
+                    // Use SQL template literal for safety and readability
+                    return sql`
+                        INSERT INTO test_answers
+                            (user_id, session_id, question_number, question_text, answer_value, answer_label, event_timestamp)
+                        VALUES
+                            (${userId}, ${sessionId}, ${answer.question_number}, ${answer.question_text}, ${answer.answer_value}, ${answer.answer_label || 'N/A'}, ${timestamp}::timestamptz)
+                    `;
+                });
+                console.log("Answer validation and query preparation successful.");
 
-                 // Execute all insert queries within a single HTTP transaction provided by Neon // Updated comment for Neon context
-                 await sql.transaction(queries);
+                // --- Stage 2: Execute Database Transaction ---
+                try {
+                    console.log(`Attempting database transaction for ${queries.length} answers...`);
+                    // Execute all insert queries within a single HTTP transaction provided by Neon
+                    await sql.transaction(queries);
 
-                 console.log(`Successfully inserted ${answers.length} answers via HTTP transaction for User: ${userId}, Session: ${sessionId}`);
-                 return res.status(201).json({ message: `Successfully logged ${answers.length} answers.` });
+                    console.log(`Successfully inserted ${answers.length} answers via HTTP transaction for User: ${userId}, Session: ${sessionId}`);
+                    return res.status(201).json({ message: `Successfully logged ${answers.length} answers.` });
 
-             } catch(validationError) { // Catch validation errors from the map() specifically
-                  console.error('Validation error preparing answer insert:', validationError);
-                  return res.status(400).json({ message: 'Data validation failed for answers', error: validationError.message });
-             } catch (dbError) { // Catch database transaction errors
-                  console.error('Database transaction error inserting answers:', dbError);
-                  return res.status(500).json({ message: 'Database error inserting answers', error: dbError.message });
-             }
+                } catch (dbError) {
+                    // --- Catch Database Errors ---
+                    console.error('Database transaction error inserting answers:', dbError);
+                    // Return 500 for database-specific errors
+                    return res.status(500).json({ message: 'Database error inserting answers', error: dbError.message });
+                }
+
+            } catch (error) {
+                // --- Catch Validation Errors (or other errors during query prep) ---
+                if (error.isValidationError) {
+                    console.error('Validation error preparing answer insert:', error.message);
+                     // Return 400 specifically for validation errors identified above
+                    return res.status(400).json({ message: 'Data validation failed for answers', error: error.message });
+                } else {
+                    // Catch any other unexpected errors during the mapping/preparation phase
+                    console.error('Unexpected error preparing answer queries:', error);
+                    return res.status(500).json({ message: 'Internal server error processing answers', error: error.message });
+                }
+            }
+            // End of 'answers' block logic
 
         } else if (type === 'result') { // --- NEW: Handle Result Payload ---
             const { profileUrl, mbtiResult, mbtiCode, traits } = payload;
