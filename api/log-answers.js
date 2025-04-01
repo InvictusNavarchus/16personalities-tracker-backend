@@ -41,18 +41,16 @@ export default async function handler(req, res) {
         if (type === 'event' && payload.eventName === 'test_started') {
             // --- Log Start Event (Optional) ---
             console.log(`Logging test_started event via HTTP for User: ${userId}, Session: ${sessionId}`);
-            // You could potentially insert this into a separate table or the same one
-            // Example using sql template literal:
-            // try {
-            //      await sql`
-            //          INSERT INTO test_events (user_id, session_id, event_name, event_timestamp)
-            //          VALUES (${userId}, ${sessionId}, ${payload.eventName}, ${timestamp})
-            //      `;
-            //      console.log('Start event inserted successfully.');
-            // } catch (dbError) {
-            //      console.error('Database error logging start event:', dbError);
-            //      // Decide if this failure should stop the process or just be logged
-            // }
+            try {
+                 await sql`
+                     INSERT INTO test_events (user_id, session_id, event_name, event_timestamp)
+                     VALUES (${userId}, ${sessionId}, ${payload.eventName}, ${timestamp})
+                 `;
+                 console.log('Start event inserted successfully.');
+            } catch (dbError) {
+                 console.error('Database error logging start event:', dbError);
+                 // Decide if this failure should stop the process or just be logged
+            }
              return res.status(200).json({ message: 'Start event received (logged server-side)' });
 
         } else if (type === 'answers') {
