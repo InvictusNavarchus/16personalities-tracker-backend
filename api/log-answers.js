@@ -166,7 +166,7 @@ export default async function handler(req, res) {
                 // Assuming a table named 'test_results' exists with the correct columns - NEW ASSUMPTION
                 await sql`
                     INSERT INTO test_results (
-                        user_id, session_id, mbti_result_full, mbti_code, profile_url,
+                        user_id, session_id, mbti_type_full, mbti_type, profile_url,
                         mind_percent, mind_type,
                         energy_percent, energy_type,
                         nature_percent, nature_type,
