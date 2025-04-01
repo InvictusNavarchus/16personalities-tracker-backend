@@ -38,23 +38,26 @@ export default async function handler(req, res) {
         }
 
         // --- Handle Different Payload Types ---
-        if (type === 'event' && payload.eventName === 'test_started') {
-            // --- Log Start Event (Optional) ---
-            console.log(`Logging test_started event via HTTP for User: ${userId}, Session: ${sessionId}`);
+        // UPDATED: Check for both 'test_started' and 'test_finished'
+        if (type === 'event' && (payload.eventName === 'test_started' || payload.eventName === 'test_finished')) {
+            console.log(`Logging ${payload.eventName} event via HTTP for User: ${userId}, Session: ${sessionId}`);
             try {
-                 await sql`
-                     INSERT INTO test_events (user_id, session_id, event_name, event_timestamp)
-                     VALUES (${userId}, ${sessionId}, ${payload.eventName}, ${timestamp})
-                 `;
-                 console.log('Start event inserted successfully.');
+                // Assuming you have a table named 'test_events'
+                await sql`
+                    INSERT INTO test_events (user_id, session_id, event_name, event_timestamp)
+                    VALUES (${userId}, ${sessionId}, ${payload.eventName}, ${timestamp})
+                `;
+                console.log(`${payload.eventName} event inserted successfully.`);
             } catch (dbError) {
-                 console.error('Database error logging start event:', dbError);
-                 // Decide if this failure should stop the process or just be logged
+                console.error(`Database error logging ${payload.eventName} event:`, dbError);
+                // Decide if this failure should stop the process or just be logged
+                // For events, maybe just log and continue?
             }
-             return res.status(200).json({ message: 'Start event received (logged server-side)' });
+            // Send success response even if DB logging had an issue (optional, depends on requirements)
+            return res.status(200).json({ message: `${payload.eventName} event received (logged server-side)` });
 
         } else if (type === 'answers') {
-            // --- Log Answers ---
+            // --- Log Answers (No changes needed here) ---
             const answers = payload.answers;
 
             if (!Array.isArray(answers) || answers.length === 0) {
