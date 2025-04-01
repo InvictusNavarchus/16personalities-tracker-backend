@@ -72,7 +72,7 @@ export default async function handler(req, res) {
                 // Use SQL template literal for safety and readability
                 return sql`
                     INSERT INTO test_answers
-                        (user_identifier, session_id, question_number, question_text, answer_value, answer_label, event_timestamp)
+                        (user_id, session_id, question_number, question_text, answer_value, answer_label, event_timestamp)
                     VALUES
                         (${userId}, ${sessionId}, ${answer.question_number}, ${answer.question_text}, ${answer.answer_value}, ${answer.answer_label}, ${timestamp})
                 `;
